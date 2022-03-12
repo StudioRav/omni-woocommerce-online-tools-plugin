@@ -333,6 +333,7 @@ function ocrf_init_gateway_class() {
  		        $restockFlag = $response['restockFlag'];
  		        $get_order_id = $response['orderId'];
 						$credit_id = $response['creditRequestID'];
+						$loan_id = $response['LoanApplicationId'];
 
  		        $order = wc_get_order($get_order_id);
  		        if(isset($order)) {
@@ -344,6 +345,12 @@ function ocrf_init_gateway_class() {
  		                    wc_update_product_stock($product, $qty, 'increase');
  		                }
  		            }
+
+								$current_loan_id = get_post_meta($get_order_id, 'omni_loan_id');
+								if(empty($current_loan_id)){
+									update_post_meta($get_order_id, 'omni_loan_id', $loan_id);
+									$order->add_order_note('Loan Application ID: '.$loan_id);
+								}
 
 								$current_credit_id = get_post_meta($get_order_id, 'omni_credit_id');
 								if(empty($current_credit_id)){
