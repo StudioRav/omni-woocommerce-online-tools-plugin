@@ -43,26 +43,22 @@ $environmentscript_url2 = ("FALSE" == $environmentscript2) ? 'https://onlinetool
 <input type="hidden" name="financeOption" id="financeOption" >
 <input type="hidden" name="Finance_Deposit" id="Finance_Deposit" >
 <script>
-jQuery(document).ready(function() {
-    jQuery('form[name="checkout"]').on('submit', function(e){
-        e.preventDefault();
-        if(jQuery('form[name="checkout"] input[name="payment_method"]:checked').val() == 'omni_finance') {
-            console.log("Using my gateway");
-            // Process using custom gateway
-            // e.preventDefault();
-            if(jQuery("#widget-product-id").length) {
-                jQuery("#financeOption").val(jQuery("#widget-product-id").html());
-                var depositPecentage = Number(jQuery('#widget-deposit').html().split('%')[0]);
-                jQuery("#Finance_Deposit").val(depositPecentage);
-            } else {
-                // alert('Please select a Product');
-                e.preventDefault();
-            }
-        } else{
-            console.log("Not using my gateway. Proceed as usual");
-        }
-    })
-
+jQuery('form.checkout').on('checkout_place_order', function(event) {
+	if(jQuery('form[name="checkout"] input[name="payment_method"]:checked').val() == 'omni_finance') {
+		if(jQuery("#widget-product-id").length) {
+			let wid = jQuery("#widget-product-id").html();
+			let depositPecentage = Number(jQuery('#widget-deposit').html().split('%')[0]);
+			jQuery("#financeOption").val(wid);
+			jQuery("#Finance_Deposit").val(depositPecentage);
+			// console.log('wid is '+wid);
+			// console.log('deposit is '+depositPecentage);
+		} else {
+			// alert('Please select a Product');
+			e.preventDefault();
+		}
+	} else {
+		console.log('checkout');
+	}
 });
 
 

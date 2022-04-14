@@ -5,7 +5,7 @@
  * Description: Allow your customers to pay by finance via Omni Capital Retail Finance on Woocommerce
  * Author: Omni Capital Retail Finance
  * Author URI: https://www.omnicapitalretailfinance.co.uk/
- * Version: 1.4
+ * Version: 1.5
  */
 
 
@@ -201,7 +201,7 @@ function ocrf_init_gateway_class() {
 			$thanks_page = $order->get_checkout_order_received_url();
 
 			$financeCode = $_POST['financeOption'];
-			$deposit_percentage = $_POST['Finance_Deposit'];
+			$deposit_percentage = (int) $_POST['Finance_Deposit'];
 
 			// Get this Order's information so that we know
 	        // who to charge and how much
