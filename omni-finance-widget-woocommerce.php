@@ -12,8 +12,9 @@
 /*
  * This action hook registers our PHP class as a WooCommerce payment gateway
  */
-add_filter( 'woocommerce_payment_gateways', 'ocrf_add_gateway_class' );
-function ocrf_add_gateway_class( $gateways ) {
+add_filter('woocommerce_payment_gateways', 'ocrf_add_gateway_class');
+function ocrf_add_gateway_class($gateways)
+{
 	$gateways[] = 'WC_Ocrf_Gateway'; // your class name is here
 	return $gateways;
 }
@@ -21,28 +22,31 @@ function ocrf_add_gateway_class( $gateways ) {
 /*
  * The class itself, please note that it is inside plugins_loaded action hook
  */
-add_action( 'plugins_loaded', 'ocrf_init_gateway_class' );
-function ocrf_init_gateway_class() {
+add_action('plugins_loaded', 'ocrf_init_gateway_class');
+function ocrf_init_gateway_class()
+{
 
 	// If the parent WC_Payment_Gateway class doesn't exist
 	// it means WooCommerce is not installed on the site
 	// so do nothing
-	if ( ! class_exists( 'WC_Payment_Gateway' ) ) return;
+	if (!class_exists('WC_Payment_Gateway')) return;
 
 	// If we made it this far, then include our Gateway Class
-	class WC_Ocrf_Gateway extends WC_Payment_Gateway {
+	class WC_Ocrf_Gateway extends WC_Payment_Gateway
+	{
 
- 		/**
- 		 * Class constructor, more about it in Step 3
- 		 */
- 		public function __construct() {
+		/**
+		 * Class constructor, more about it in Step 3
+		 */
+		public function __construct()
+		{
 
 			$this->id = 'omni_finance'; // payment gateway plugin ID
 			$this->icon = ''; // URL of the icon that will be displayed on checkout page near your gateway name
 			$this->has_fields = true; // in case you need a custom credit card form
 			$this->method_title = 'Pay by Finance - Omni Capital Retail Finance';
 			$this->method_description = 'Omni Capital Retail Finance for WooCommerce'; // will be displayed on the options page
-    	$this->order_button_text = __('Pay by Finance', 'woocommerce');
+			$this->order_button_text = __('Pay by Finance', 'woocommerce');
 			// gateways can support subscriptions, refunds, saved payment methods,
 			// but in this tutorial we begin with simple payments
 			$this->supports = array(
@@ -54,45 +58,58 @@ function ocrf_init_gateway_class() {
 
 			// Load the settings.
 			$this->init_settings();
-			$this->title = $this->get_option( 'title' );
-			$this->description = $this->get_option( 'description' );
-			$this->enabled = $this->get_option( 'enabled' );
-			$this->environment = $this->get_option( 'environment' );
-			$this->template_id = $this->get_option( 'template_id' );
+			$this->title = $this->get_option('title');
+			$this->description = $this->get_option('description');
+			$this->enabled = $this->get_option('enabled');
+			$this->environment = $this->get_option('environment');
+			$this->template_id = $this->get_option('template_id');
 
 			/** SOF code to add min order and country restriction **/
-			$this->enabled_uk_only = $this->get_option( 'uk_only' );
-			$this->min_order_value = $this->get_option( 'min_amount' );
-			if(is_checkout()){
+			$this->enabled_uk_only = $this->get_option('uk_only');
+			$this->min_order_value = $this->get_option('min_amount');
+			$this->suppress_emails = $this->get_option('suppress_emails');
+			if (is_checkout()) {
 				global $woocommerce;
 				// Will get you cart object
 				$cart_total = $woocommerce->cart->total;
 				$customer_country = $woocommerce->customer->get_billing_country();
-				if($cart_total < $this->min_order_value){
-				    $this->enabled = false;
+				if ($cart_total < $this->min_order_value) {
+					$this->enabled = false;
 				}
-				if($this->enabled_uk_only && $customer_country != 'GB'){
-				    $this->enabled = false;
+				if ($this->enabled_uk_only && $customer_country != 'GB') {
+					$this->enabled = false;
 				}
+			}
+
+			if($this->suppress_emails){
+				add_action( 'woocommerce_email', array($this, 'supress_emails') );
 			}
 			/** EOF code to add min order and country restriction **/
 
 			// This action hook saves the settings
-			add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+			add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
 
 			// We need custom JavaScript to obtain a token
-			add_action( 'wp_enqueue_scripts', array( $this, 'payment_scripts' ) );
+			add_action('wp_enqueue_scripts', array($this, 'payment_scripts'));
 
 			$this->notify_url = home_url('/wc-api/omni_finance');
 
-	        // So let's attach to the api url you create in notify_url - the hook it fires
-			add_action('woocommerce_api_omni_finance', array( $this, 'webhook' ) );
+			// So let's attach to the api url you create in notify_url - the hook it fires
+			add_action('woocommerce_api_omni_finance', array($this, 'webhook'));
+		}
+
+		public function supress_emails($email_class)
+		{
+			remove_action( 'woocommerce_order_status_pending_to_processing_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
+			remove_action( 'woocommerce_order_status_pending_to_completed_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
+			remove_action( 'woocommerce_order_status_pending_to_on-hold_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
 		}
 
 		/**
- 		 * Plugin options, we deal with it in Step 3 too
- 		 */
-		public function init_form_fields(){
+		 * Plugin options, we deal with it in Step 3 too
+		 */
+		public function init_form_fields()
+		{
 
 			$this->form_fields = array(
 				'enabled' => array(
@@ -129,56 +146,61 @@ function ocrf_init_gateway_class() {
 					'description' => 'Widget shown on Product and Cart page',
 					'default'     => '',
 				),
-        'min_amount' => array(
-            'title'       => 'Min Order Value',
-            'type'        => 'text',
-            'description' => 'Activate this payment method only on orders above this value',
-            'default'     => '0',
-            'desc_tip'    => true,
-        ),
-        'uk_only' => array(
-            'title'       => 'Restrict to UK orders only',
-            'label'       => 'Restrict to UK orders only',
-            'type'        => 'checkbox',
-            'description' => '',
-            'default'     => 'no'
-        )
+				'min_amount' => array(
+					'title'       => 'Min Order Value',
+					'type'        => 'text',
+					'description' => 'Activate this payment method only on orders above this value',
+					'default'     => '0',
+					'desc_tip'    => true,
+				),
+				'uk_only' => array(
+					'title'       => 'Restrict to UK orders only',
+					'label'       => 'Restrict to UK orders only',
+					'type'        => 'checkbox',
+					'description' => '',
+					'default'     => 'no'
+				),
+				'suppress_emails' => array(
+					'title'       => 'Suppress order email to admin if on hold',
+					'label'       => 'Suppress order email to admin if on hold',
+					'type'        => 'checkbox',
+					'description' => '',
+					'default'     => 'no'
+				)
 			);
 		}
 
 		/**
 		 * You will need it if you want your custom credit card form, Step 4 is about it
 		 */
-		public function payment_fields() {
+		public function payment_fields()
+		{
 			echo $this->description;
 
 			$template_id = $this->template_id;
 			$gateway_enabled = $this->enabled;
 
-			if($gateway_enabled == 'yes' && $template_id != '') {
+			if ($gateway_enabled == 'yes' && $template_id != '') {
 				global $woocommerce;
 				$total_order = floatval(preg_replace('#[^\d.]#', '', $woocommerce->cart->total));
 				$total_order = number_format((float) $total_order, 2, '.', '');
 
 				include 'omni-helper.php';
-
 			}
 		}
 
 		/*
 		 * Custom CSS and JS, in most cases required only when you decided to go with a custom credit card form
 		 */
-		public function payment_scripts() {
-
+		public function payment_scripts()
+		{
 		}
 
 		/*
  		 * Fields validation, more in Step 5
 		 */
-		public function validate_fields() {
-
-
-
+		public function validate_fields()
+		{
 		}
 
 		/*
@@ -189,7 +211,7 @@ function ocrf_init_gateway_class() {
 			global $woocommerce;
 
 			if (session_status() === PHP_SESSION_NONE) {
-			    session_start();
+				session_start();
 			}
 			$_SESSION['omni-order-id'] = $order_id;
 
@@ -204,13 +226,13 @@ function ocrf_init_gateway_class() {
 			$deposit_percentage = (int) $_POST['Finance_Deposit'];
 
 			// Get this Order's information so that we know
-	        // who to charge and how much
+			// who to charge and how much
 			setcookie('omni_order_id', $order_id, time() + 3600, '/');
 
 			//test/live env
-			$environment = "FALSE" ;
-			if($this->environment){
-					$environment = ($this->environment == "yes") ? 'TRUE' : 'FALSE';
+			$environment = "FALSE";
+			if ($this->environment) {
+				$environment = ($this->environment == "yes") ? 'TRUE' : 'FALSE';
 			}
 			// Decide which URL to post to
 			$environment_url = ("FALSE" == $environment) ? 'https://onlinetools.omnicapital.co.uk/api/omni/createLoanApplication' : 'https://test.onlinetools.omnicapital.co.uk/api/omni/createLoanApplication';
@@ -261,11 +283,10 @@ function ocrf_init_gateway_class() {
 			//throw new Exception(__($response->get_error_message(), 'finance-gateway'));
 
 			// If error from response output
-			if (is_wp_error($response))
-				{
-					$customer_order->update_status('cancelled', 'There was a problem redirecting to the payment gateway. If this problem persists please contact Customer Services.');
-					throw new Exception(__('We are currently experiencing problems trying to connect to this payment gateway. Sorry for the inconvenience.', 'finance-gateway'));
-				}
+			if (is_wp_error($response)) {
+				$customer_order->update_status('cancelled', 'There was a problem redirecting to the payment gateway. If this problem persists please contact Customer Services.');
+				throw new Exception(__('We are currently experiencing problems trying to connect to this payment gateway. Sorry for the inconvenience.', 'finance-gateway'));
+			}
 
 			if (empty($response['body']))
 				throw new Exception(__('No response back.', 'finance-gateway'));
@@ -281,113 +302,114 @@ function ocrf_init_gateway_class() {
 		/*
 		 * In case you need a webhook, like PayPal IPN etc
 		 */
-		 public function webhook() {
- 		    global $woocommerce;
+		public function webhook()
+		{
+			global $woocommerce;
 
- 		    if(isset($_REQUEST['omni_status'])) {
+			if (isset($_REQUEST['omni_status'])) {
 
- 		        if(isset($_COOKIE['omni_order_id'])) {
- 		            $order = wc_get_order($_COOKIE['omni_order_id']);
+				if (isset($_COOKIE['omni_order_id'])) {
+					$order = wc_get_order($_COOKIE['omni_order_id']);
 
- 		            if(isset($order)) {
+					if (isset($order)) {
 						/* Sometimes Webhook not return us wc-ocrf_awaiting_fu status in $_REQUEST['status'] then $_REQUEST['omni_status'] handle the process */
- 		                if($_REQUEST['omni_status'] == 'accepted') {
- 		                    // $order->update_status( 'processing' );
+						if ($_REQUEST['omni_status'] == 'accepted') {
+							// $order->update_status( 'processing' );
 
- 		                }
+						}
 
- 		                $thanks_page = $order->get_checkout_order_received_url();
+						$thanks_page = $order->get_checkout_order_received_url();
 
- 		                /* Sometimes Webhook not return us wc-ocrf_chkdeclind status in $_REQUEST['status'] then $_REQUEST['omni_status'] handle the process */
- 		                if($_REQUEST['omni_status'] == 'declined') {
- 		                    // $customer_order->update_status('cancelled');
- 		                    $cart_url = wc_get_page_permalink('cart');
- 		                    wc_add_notice( sprintf( __( "Unfortunately your application for finance was not successful. Please use another payment method.", "" ) ) ,'error' );
- 		                    /* wp_delete_post($_COOKIE['omni_order_id']); */
- 		                    wp_safe_redirect($cart_url);
- 		                    /* setcookie('omni_declined', $_COOKIE['omni_order_id'], time() + 3600, '/'); */
- 		                } else {
- 		                    wp_safe_redirect($thanks_page);
- 		                }
- 		            //we show appropriate message in the hooks below
- 		            } else {
+						/* Sometimes Webhook not return us wc-ocrf_chkdeclind status in $_REQUEST['status'] then $_REQUEST['omni_status'] handle the process */
+						if ($_REQUEST['omni_status'] == 'declined') {
+							// $customer_order->update_status('cancelled');
+							$cart_url = wc_get_page_permalink('cart');
+							wc_add_notice(sprintf(__("Unfortunately your application for finance was not successful. Please use another payment method.", "")), 'error');
+							/* wp_delete_post($_COOKIE['omni_order_id']); */
+							wp_safe_redirect($cart_url);
+							/* setcookie('omni_declined', $_COOKIE['omni_order_id'], time() + 3600, '/'); */
+						} else {
+							wp_safe_redirect($thanks_page);
+						}
+						//we show appropriate message in the hooks below
+					} else {
 						/* In case not getting order or order missing then handle */
- 		                // $pay_page    = $order->get_checkout_payment_url(false);
- 		                $notice = 'No order found. Please place an order to proceed.';
- 		                $notice_type = 'error';
- 		                $pay_page    = wc_get_endpoint_url( 'order-pay', '', wc_get_checkout_url() );
- 		                wc_add_notice($notice, $notice_type);
- 		                wp_safe_redirect($pay_page);
- 		            }
- 		        } else {
+						// $pay_page    = $order->get_checkout_payment_url(false);
+						$notice = 'No order found. Please place an order to proceed.';
+						$notice_type = 'error';
+						$pay_page    = wc_get_endpoint_url('order-pay', '', wc_get_checkout_url());
+						wc_add_notice($notice, $notice_type);
+						wp_safe_redirect($pay_page);
+					}
+				} else {
 					/* In case not getting omni_order_id from cookie then handle */
- 		            // $pay_page    = $order->get_checkout_payment_url(false);
- 		            $notice = 'No order found. Please place an order to proceed.';
- 		            $notice_type = 'error';
- 		            $pay_page    = wc_get_endpoint_url( 'order-pay', '', wc_get_checkout_url() );
- 		            wc_add_notice($notice, $notice_type);
- 		            wp_safe_redirect($pay_page);
- 		        }
- 		    } else {
- 		        $response = $_REQUEST;
- 		        $restockFlag = $response['restockFlag'];
- 		        $get_order_id = $response['orderId'];
-						$credit_id = $response['creditRequestID'];
-						$loan_id = $response['LoanApplicationId'];
+					// $pay_page    = $order->get_checkout_payment_url(false);
+					$notice = 'No order found. Please place an order to proceed.';
+					$notice_type = 'error';
+					$pay_page    = wc_get_endpoint_url('order-pay', '', wc_get_checkout_url());
+					wc_add_notice($notice, $notice_type);
+					wp_safe_redirect($pay_page);
+				}
+			} else {
+				$response = $_REQUEST;
+				$restockFlag = $response['restockFlag'];
+				$get_order_id = $response['orderId'];
+				$credit_id = $response['creditRequestID'];
+				$loan_id = $response['LoanApplicationId'];
 
- 		        $order = wc_get_order($get_order_id);
- 		        if(isset($order)) {
- 		            $prevStatus = $order->get_status();
- 		            if ($restockFlag == "true" && !in_array($prevStatus, array('ocrf_cancelled', 'ocrf_refunded', 'ocrf_chkdeclind'))) {
- 		                foreach ($order->get_items() as $item_id => $item) {
- 		                    $product = $item->get_product();
- 		                    $qty = $item->get_quantity(); // Get the item quantity
- 		                    wc_update_product_stock($product, $qty, 'increase');
- 		                }
- 		            }
+				$order = wc_get_order($get_order_id);
+				if (isset($order)) {
+					$prevStatus = $order->get_status();
+					if ($restockFlag == "true" && !in_array($prevStatus, array('ocrf_cancelled', 'ocrf_refunded', 'ocrf_chkdeclind'))) {
+						foreach ($order->get_items() as $item_id => $item) {
+							$product = $item->get_product();
+							$qty = $item->get_quantity(); // Get the item quantity
+							wc_update_product_stock($product, $qty, 'increase');
+						}
+					}
 
-								$current_loan_id = get_post_meta($get_order_id, 'omni_loan_id');
-								if(empty($current_loan_id)){
-									update_post_meta($get_order_id, 'omni_loan_id', $loan_id);
-									$order->add_order_note('Loan Application ID: '.$loan_id);
-								}
+					$current_loan_id = get_post_meta($get_order_id, 'omni_loan_id');
+					if (empty($current_loan_id)) {
+						update_post_meta($get_order_id, 'omni_loan_id', $loan_id);
+						$order->add_order_note('Loan Application ID: ' . $loan_id);
+					}
 
-								$current_credit_id = get_post_meta($get_order_id, 'omni_credit_id');
-								if(empty($current_credit_id)){
-									update_post_meta($get_order_id, 'omni_credit_id', $credit_id);
-									$order->add_order_note('Credit Request ID: '.$credit_id);
-								}
+					$current_credit_id = get_post_meta($get_order_id, 'omni_credit_id');
+					if (empty($current_credit_id)) {
+						update_post_meta($get_order_id, 'omni_credit_id', $credit_id);
+						$order->add_order_note('Credit Request ID: ' . $credit_id);
+					}
 
- 		            /* As we get CSN/IPN from Omniport we add status update to the order as comment */
- 		            $omni_order_stuses = omni_order_stuses_callback();
- 		            $note = '';
- 		            foreach ($omni_order_stuses as $slug => $label) {
+					/* As we get CSN/IPN from Omniport we add status update to the order as comment */
+					$omni_order_stuses = omni_order_stuses_callback();
+					$note = '';
+					foreach ($omni_order_stuses as $slug => $label) {
 						/* If status matched with OCRF statues */
-            if($response['status'] == $slug) {
-                /* The text for the note */
-                $note = __($label);
+						if ($response['status'] == $slug) {
+							/* The text for the note */
+							$note = __($label);
 
- 		          /* if OCRF_AWAITING_FULFILMENT change status to PROCESSING
+							/* if OCRF_AWAITING_FULFILMENT change status to PROCESSING
 							*   Webhook return us wc-ocrf_awaiting_fu status in $_REQUEST['status'] then handler
 							* */
-							if($response['status'] == 'wc-ocrf_awaiting_fu') {
+							if ($response['status'] == 'wc-ocrf_awaiting_fu') {
 								// $order->add_order_note($note);
-                $order->update_status('processing', 'Deposit for finance application successsfully taken. Order has now been confirmed.');
+								$order->update_status('processing', 'Deposit for finance application successsfully taken. Order has now been confirmed.');
 
-                /* Get the WC_Email_New_Order object */
-                $email_new_order = WC()->mailer()->get_emails()['WC_Email_New_Order'];
-                $email_new_order1 = WC()->mailer()->get_emails()['WC_Email_Customer_Processing_Order'];
-                /* Sending the new Order email notification for an $order_id (order ID) */
-                $email_new_order->trigger($get_order_id);
-                $email_new_order1->trigger($get_order_id);
+								/* Get the WC_Email_New_Order object */
+								$email_new_order = WC()->mailer()->get_emails()['WC_Email_New_Order'];
+								$email_new_order1 = WC()->mailer()->get_emails()['WC_Email_Customer_Processing_Order'];
+								/* Sending the new Order email notification for an $order_id (order ID) */
+								$email_new_order->trigger($get_order_id);
+								$email_new_order1->trigger($get_order_id);
 
 								$thanks_page = $order->get_checkout_order_received_url();
 								wp_safe_redirect($thanks_page);
-              }
- 		          /* if OCRF_CREDIT_CHECK_DECLINED change status to CANCELLED
+							}
+							/* if OCRF_CREDIT_CHECK_DECLINED change status to CANCELLED
 							*  Webhook return us wc-ocrf_chkdeclind status in $_REQUEST['status'] then handler
 							* */
- 		          if($response['status'] == 'wc-ocrf_chkdeclind') {
+							if ($response['status'] == 'wc-ocrf_chkdeclind') {
 								$order->update_status('failed', 'Unfortunately the finance application was declined.');
 								/* Add the note
 			 		            if(isset($note)) {
@@ -395,13 +417,13 @@ function ocrf_init_gateway_class() {
 			 		            }*/
 
 								$cart_url = wc_get_page_permalink('cart');
-	 		                    wc_add_notice( sprintf( __( "Unfortunately your application for finance was not successful. Please use another payment method.", "" ) ) ,'error' );
+								wc_add_notice(sprintf(__("Unfortunately your application for finance was not successful. Please use another payment method.", "")), 'error');
 								wp_safe_redirect($cart_url);
 							}
 							/* if OCRF - SIGN DOCUMENTS change status to ON HOLD
 							*  Webhook return us wc-ocrf_sign_doc status in $_REQUEST['status'] then handler
 							* */
-							if($response['status'] == 'wc-ocrf_sign_doc') {
+							if ($response['status'] == 'wc-ocrf_sign_doc') {
 								$order->update_status('on-hold');
 								/* Add the note
 											if(isset($note)) {
@@ -411,7 +433,7 @@ function ocrf_init_gateway_class() {
 							/* if OCRF_CREDIT_CHECK_REFERRED change status to ON HOLD
 							*  Webhook return us wc-ocrf_checkrffred status in $_REQUEST['status'] then handler
 							* */
- 		          if($response['status'] == 'wc-ocrf_checkrffred') {
+							if ($response['status'] == 'wc-ocrf_checkrffred') {
 								$order->update_status('on-hold', 'Loan application has been referred - Decision to be confirmed shortly.');
 								/* Add the note
 			 		            if(isset($note)) {
@@ -421,7 +443,7 @@ function ocrf_init_gateway_class() {
 							/* if OCRF_FINANCE_OFFER_WITHDRAWN change status to FAILED
 							*  Webhook return us wc-ocrf_withdrawn status in $_REQUEST['status'] then handler
 							* */
- 		          if($response['status'] == 'wc-ocrf_withdrawn') {
+							if ($response['status'] == 'wc-ocrf_withdrawn') {
 								$order->update_status('failed', 'The finance application has been withdrawn.');
 								/* Add the note
 			 		            if(isset($note)) {
@@ -431,22 +453,22 @@ function ocrf_init_gateway_class() {
 							/* if OCRF_ORDER_CANCELLED change status to FAILED
 							*  Webhook return us wc-ocrf_cancelled status in $_REQUEST['status'] then handler
 							* */
-							if($response['status'] == 'wc-ocrf_cancelled') {
+							if ($response['status'] == 'wc-ocrf_cancelled') {
 								$order->update_status('failed', 'The finance application has been cancelled.');
 								/* Add the note
 											if(isset($note)) {
 													$order->add_order_note($note);
 											}*/
 							}
- 		         }
- 		        }
- 		            /* Add the note for all OCRF webhook response */
- 		            if(isset($note)) {
- 		                $order->add_order_note($note);
- 		            }
- 		        }
- 		    }
- 		}
+						}
+					}
+					/* Add the note for all OCRF webhook response */
+					if (isset($note)) {
+						$order->add_order_note($note);
+					}
+				}
+			}
+		}
 	}	//class ends here
 
 	/* function my_function() {
@@ -456,7 +478,8 @@ function ocrf_init_gateway_class() {
 	}
 	add_action( "woocommerce_checkout_process", "my_function"); */
 
-	function omni_order_stuses_callback(){
+	function omni_order_stuses_callback()
+	{
 
 		$omni_order_stuses = array(
 			'wc-ocrf_checkrffred' 		=> 'OCRF - CREDIT CHECK REFERRED',
@@ -479,82 +502,86 @@ function ocrf_init_gateway_class() {
 
 	foreach ($omni_order_stuses as $slug => $label) {
 
-		register_post_status( $slug, array(
+		register_post_status($slug, array(
 			'label'                     => $label,
 			'public'                    => true,
 			'exclude_from_search'       => false,
 			'show_in_admin_all_list'    => true,
 			'show_in_admin_status_list' => true,
-			'label_count'               => _n_noop( $label . ' <span class="count">(%s)</span>', $label . ' <span class="count">(%s)</span>' ),
-		) );
+			'label_count'               => _n_noop($label . ' <span class="count">(%s)</span>', $label . ' <span class="count">(%s)</span>'),
+		));
 	}
 
 	$filters_priority = PHP_INT_MAX;
 
-	add_filter( 'wc_order_statuses', 'add_omni_order_statuses', $filters_priority );
+	add_filter('wc_order_statuses', 'add_omni_order_statuses', $filters_priority);
 
-	function add_omni_order_statuses( $order_statuses ) {
+	function add_omni_order_statuses($order_statuses)
+	{
 
 		$omni_order_stuses = omni_order_stuses_callback();
 
 		foreach ($omni_order_stuses as $slug => $label) {
 
-			$order_statuses[$slug] = _x( $label, 'WooCommerce Order status', 'text_domain' );
+			$order_statuses[$slug] = _x($label, 'WooCommerce Order status', 'text_domain');
 		}
 		return $order_statuses;
 	}
 }	//init function ends here
 
-register_deactivation_hook( __FILE__, 'omni_capital_deactivation_callback' );
+register_deactivation_hook(__FILE__, 'omni_capital_deactivation_callback');
 
-function omni_capital_deactivation_callback(){
+function omni_capital_deactivation_callback()
+{
 
-	function ocrf_remove_order_statuses( $wc_statuses_arr ){
+	function ocrf_remove_order_statuses($wc_statuses_arr)
+	{
 
 		$omni_order_stuses = omni_order_stuses_callback();
 
 		foreach ($omni_order_stuses as $slug => $label) {
 
-			if( isset( $wc_statuses_arr[$slug] ) ) {
-				unset( $wc_statuses_arr[$slug] );
+			if (isset($wc_statuses_arr[$slug])) {
+				unset($wc_statuses_arr[$slug]);
 			}
 		}
 	}
-	add_filter( 'wc_order_statuses', 'ocrf_remove_order_statuses' );
+	add_filter('wc_order_statuses', 'ocrf_remove_order_statuses');
 }
 
 // add_action( 'woocommerce_before_add_to_cart_button', 'add_content_before_addtocart_button_func' );
-add_action( 'woocommerce_single_product_summary', 'add_content_before_addtocart_button_func', 15 );
+add_action('woocommerce_single_product_summary', 'add_content_before_addtocart_button_func', 15);
 
 /*
  * Content above "Add to cart" Button.
  */
-function add_content_before_addtocart_button_func() {
-	$_product = wc_get_product( get_the_ID() );
+function add_content_before_addtocart_button_func()
+{
+	$_product = wc_get_product(get_the_ID());
 	$prod_price = 0;
-	if( $_product->is_type( 'simple' ) ){
-	  // a simple product
+	if ($_product->is_type('simple')) {
+		// a simple product
 		$prod_price = $_product->get_price();
-	} elseif( $_product->is_type( 'variable' ) ){
-	  // a variable product
+	} elseif ($_product->is_type('variable')) {
+		// a variable product
 		$prod_price = $_product->get_variation_price();
 	}
 
-	$omni_settings = get_option( 'woocommerce_omni_finance_settings');
+	$omni_settings = get_option('woocommerce_omni_finance_settings');
 	$template_id = $omni_settings['template_id'];
 	$gateway_enabled = $omni_settings['enabled'];
 	$test = $omni_settings['environment'];
-	$environmentscript = "FALSE" ;
-	if($test){
-			$environmentscript = ($test == "yes") ? 'TRUE' : 'FALSE';
+	$environmentscript = "FALSE";
+	if ($test) {
+		$environmentscript = ($test == "yes") ? 'TRUE' : 'FALSE';
 	}
 	// Decide which URL to post to
 	$environmentscript_url = ("FALSE" == $environmentscript) ? 'https://onlinetools.omnicapital.co.uk/static/js/widgets.js' : 'https://test.onlinetools.omnicapital.co.uk/static/js/widgets.js';
 
-	if($gateway_enabled == 'yes' && $template_id != '') {
+	if ($gateway_enabled == 'yes' && $template_id != '') {
 		echo "<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
 		<div id='root123'></div>
-		<script src='".$environmentscript_url."' id='finWidgetScript' data-config=\"{'name': 'w1', 'templateId' : '".$template_id."', 'price': '".$prod_price."', 'config': {'targetElementId': 'root123'}}\"></script>
+		<script src='" . $environmentscript_url . "' id='finWidgetScript' data-config=\"{'name': 'w1', 'templateId' : '" . $template_id . "', 'price': '" . $prod_price . "', 'config': {'targetElementId': 'root123'}}\"></script>
 		<script>
 			jQuery(document).ready(function($) {
 
@@ -583,57 +610,59 @@ function add_content_before_addtocart_button_func() {
 	}
 }
 
-add_action( 'woocommerce_proceed_to_checkout', 'show_finance_after_cart' );
+add_action('woocommerce_proceed_to_checkout', 'show_finance_after_cart');
 // add_action( 'woocommerce_after_cart', 'show_finance_after_cart' );
 /*
  * Content above "Add to cart" Button.
  */
-function show_finance_after_cart() {
+function show_finance_after_cart()
+{
 	global $woocommerce;
 	$total_order = floatval(preg_replace('#[^\d.]#', '', $woocommerce->cart->total));
 	$total_order = number_format((float) $total_order, 2, '.', '');
-	$omni_settings = get_option( 'woocommerce_omni_finance_settings');
+	$omni_settings = get_option('woocommerce_omni_finance_settings');
 	$template_id = $omni_settings['template_id'];
 	$gateway_enabled = $omni_settings['enabled'];
 	$test = $omni_settings['environment'];
-	if($test){
-			$environmentscript = ($test == "yes") ? 'TRUE' : 'FALSE';
+	if ($test) {
+		$environmentscript = ($test == "yes") ? 'TRUE' : 'FALSE';
 	}
 	$environmentscript_url = ("FALSE" == $environmentscript) ? 'https://onlinetools.omnicapital.co.uk/static/js/widgets.js' : 'https://test.onlinetools.omnicapital.co.uk/static/js/widgets.js';
 
-	if($gateway_enabled == 'yes' && $template_id != '') {
+	if ($gateway_enabled == 'yes' && $template_id != '') {
 		echo "<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />
 		<div id='root123'></div>
-		<script src='".$environmentscript_url."' id='finWidgetScript' data-config=\"{'name': 'w1', 'templateId' : '".$template_id."', 'price': '".$total_order."', 'config': {'targetElementId': 'root123'}}\"></script>";
+		<script src='" . $environmentscript_url . "' id='finWidgetScript' data-config=\"{'name': 'w1', 'templateId' : '" . $template_id . "', 'price': '" . $total_order . "', 'config': {'targetElementId': 'root123'}}\"></script>";
 	}
 }
 
 // add_action( 'wp_footer', 'footer_hook' );
-function footer_hook() {
-
+function footer_hook()
+{
 }
 
 // add_action( 'wp_enqueue_scripts', 'my_custom_script_load' );
-function my_custom_script_load(){
-//   wp_enqueue_script( 'my-custom-script', get_stylesheet_directory_uri() . '/custom-scripts', array( 'jquery' ) );
+function my_custom_script_load()
+{
+	//   wp_enqueue_script( 'my-custom-script', get_stylesheet_directory_uri() . '/custom-scripts', array( 'jquery' ) );
 }
 
 // add_action( 'woocommerce_thankyou', 'view_order_and_thankyou_page', 20 );
-function view_order_and_thankyou_page( $order_id ){
+function view_order_and_thankyou_page($order_id)
+{
 
-	if($_COOKIE['omni_declined'] == $_COOKIE['omni_order_id']) {
-
+	if ($_COOKIE['omni_declined'] == $_COOKIE['omni_order_id']) {
 	}
-
 }
 
-add_filter( 'woocommerce_endpoint_order-received_title', 'thank_you_title' );
-function thank_you_title( $old_title )	{
-	$order_id = wc_get_order_id_by_order_key( $_GET['key'] );
-	$order = wc_get_order( $order_id );
+add_filter('woocommerce_endpoint_order-received_title', 'thank_you_title');
+function thank_you_title($old_title)
+{
+	$order_id = wc_get_order_id_by_order_key($_GET['key']);
+	$order = wc_get_order($order_id);
 	$notice_type = 'Error';
 
-	if(isset($order)) {
+	if (isset($order)) {
 		$orderStatus = $order->get_status();
 
 		if ($orderStatus == "ocrf_approved") {
@@ -650,13 +679,14 @@ function thank_you_title( $old_title )	{
 	return $notice_type;
 }
 
-add_filter( 'woocommerce_thankyou_order_received_text', 'thank_you_text', 20, 2 );
-function thank_you_text( $thank_you_title, $order )	{
+add_filter('woocommerce_thankyou_order_received_text', 'thank_you_text', 20, 2);
+function thank_you_text($thank_you_title, $order)
+{
 	$notice = 'No order found. Please place an order to proceed.';
 
-	if(isset($order)) {
+	if (isset($order)) {
 
-		if(isset($order)) {
+		if (isset($order)) {
 			$orderStatus = $order->get_status();
 
 			if ($orderStatus == "ocrf_approved") {
@@ -668,7 +698,7 @@ function thank_you_text( $thank_you_title, $order )	{
 			} else if ($orderStatus == "ocrf_cancelled") {
 				$notice = 'Cancelled.';
 			} else {
-                $notice = 'Thank you for order';
+				$notice = 'Thank you for order';
 				//$notice = 'Your application is in status '.$orderStatus;
 			}
 		}
