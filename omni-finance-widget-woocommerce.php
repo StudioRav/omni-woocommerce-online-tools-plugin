@@ -5,7 +5,7 @@
  * Description: Allow your customers to pay by finance via Omni Capital Retail Finance on Woocommerce
  * Author: Omni Capital Retail Finance
  * Author URI: https://www.omnicapitalretailfinance.co.uk/
- * Version: 1.5.1
+ * Version: 1.6
  */
 
 
