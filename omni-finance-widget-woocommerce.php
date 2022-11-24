@@ -5,7 +5,7 @@
  * Description: Allow your customers to pay by finance via Omni Capital Retail Finance on Woocommerce
  * Author: Omni Capital Retail Finance
  * Author URI: https://www.omnicapitalretailfinance.co.uk/
- * Version: 1.6
+ * Version: 1.6.2
  */
 
 
@@ -17,6 +17,24 @@ function ocrf_add_gateway_class($gateways)
 {
 	$gateways[] = 'WC_Ocrf_Gateway'; // your class name is here
 	return $gateways;
+}
+
+add_filter( 'woocommerce_available_payment_gateways', 'dayz_payment_gateway_disable_country' );
+
+function dayz_payment_gateway_disable_country( $available_gateways ) {
+    if ( is_admin() ) return $available_gateways;
+	$omini = WC()->payment_gateways->payment_gateways()['omni_finance'];
+
+    if ( isset( $available_gateways['omni_finance'] ) && WC()->customer && $omini->enabled_uk_only == 'yes' && WC()->customer->get_billing_country() <> 'GB' ) {
+        unset( $available_gateways['omni_finance'] );
+    }
+
+	// Will get you cart object
+	$cart_total = WC()->cart->total;
+	if (floatval($cart_total) < floatval($omini->min_order_value)) {
+		unset( $available_gateways['omni_finance'] );
+	}
+    return $available_gateways;
 }
 
 /*
@@ -68,22 +86,13 @@ function ocrf_init_gateway_class()
 			$this->enabled_uk_only = $this->get_option('uk_only');
 			$this->min_order_value = $this->get_option('min_amount');
 			$this->suppress_emails = $this->get_option('suppress_emails');
-			if (is_checkout()) {
-				global $woocommerce;
-				// Will get you cart object
-				$cart_total = $woocommerce->cart->total;
-				$customer_country = $woocommerce->customer->get_billing_country();
-				if ($cart_total < $this->min_order_value) {
-					$this->enabled = false;
-				}
-				if ($this->enabled_uk_only && $customer_country != 'GB') {
-					$this->enabled = false;
-				}
-			}
 
-			if($this->suppress_emails){
+
+			// if($this->suppress_emails){
 				add_action( 'woocommerce_email', array($this, 'supress_emails') );
-			}
+				add_action( 'woocommerce_email_before_order_table', array($this, 'custom_admin_new_order_email'), 0, 2 );
+
+			// }
 			/** EOF code to add min order and country restriction **/
 
 			// This action hook saves the settings
@@ -100,9 +109,19 @@ function ocrf_init_gateway_class()
 
 		public function supress_emails($email_class)
 		{
-			remove_action( 'woocommerce_order_status_pending_to_processing_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
-			remove_action( 'woocommerce_order_status_pending_to_completed_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
-			remove_action( 'woocommerce_order_status_pending_to_on-hold_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
+			// $logger = wc_logger();
+			// $logger->info(json_encode($email_class));
+			// if($this->suppress_emails){
+			// 	remove_action( 'woocommerce_order_status_pending_to_processing_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
+			// 	remove_action( 'woocommerce_order_status_pending_to_completed_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
+			// 	remove_action( 'woocommerce_order_status_pending_to_on-hold_notification', array( $email_class->emails['WC_Email_New_Order'], 'trigger' ) );
+			// }
+		}
+
+		function custom_admin_new_order_email( $order, $is_admin_email ) {
+			if($is_admin_email && $order->get_status() == 'on-hold' && $order->get_payment_method() == 'omni_finance'){
+				echo "<p style='color:red; font-weight:bold'>THIS IS A FINANCE ORDER AND IS CURRENTLY ON HOLD. PLEASE DO NOT PROCESS IT.</p>";
+			}
 		}
 
 		/**
@@ -160,13 +179,13 @@ function ocrf_init_gateway_class()
 					'description' => '',
 					'default'     => 'no'
 				),
-				'suppress_emails' => array(
-					'title'       => 'Suppress order email to admin if on hold',
-					'label'       => 'Suppress order email to admin if on hold',
-					'type'        => 'checkbox',
-					'description' => '',
-					'default'     => 'no'
-				)
+				// 'suppress_emails' => array(
+				// 	'title'       => 'Suppress order email to admin if on hold',
+				// 	'label'       => 'Suppress order email to admin if on hold',
+				// 	'type'        => 'checkbox',
+				// 	'description' => '',
+				// 	'default'     => 'no'
+				// )
 			);
 		}
 
@@ -185,7 +204,7 @@ function ocrf_init_gateway_class()
 				$total_order = floatval(preg_replace('#[^\d.]#', '', $woocommerce->cart->total));
 				$total_order = number_format((float) $total_order, 2, '.', '');
 
-				include 'omni-helper.php';
+				include 'omni-helper-new.php';
 			}
 		}
 
@@ -292,7 +311,6 @@ function ocrf_init_gateway_class()
 				throw new Exception(__('No response back.', 'finance-gateway'));
 
 			$customer_order->update_status('on-hold', 'Pending credit check with Omni Capital Retail Finance.');
-
 			return array(
 				'result' => 'success',
 				'redirect' => $response['body']
